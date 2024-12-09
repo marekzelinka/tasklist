@@ -1,3 +1,7 @@
+import {
+  attachClosestEdge,
+  extractClosestEdge,
+} from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge";
 import type { Edge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/types";
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
 import {
@@ -12,6 +16,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import invariant from "tiny-invariant";
 import type { Task } from "../types";
+import { DropIndicator } from "./DropIndicator";
 
 type ItemState =
   | {
@@ -62,23 +67,58 @@ export function TaskItem({ task }: { task: Task }) {
       }),
       dropTargetForElements({
         element,
+        getData: ({ input }) => {
+          const data = {};
+
+          return attachClosestEdge(data, {
+            element,
+            input,
+            allowedEdges: ["top", "bottom"],
+          });
+        },
+        getIsSticky: () => true,
+        onDragStart: ({ self }) => {
+          const closestEdge = extractClosestEdge(self.data);
+
+          setState({ type: "is-dragging-over", closestEdge });
+        },
+        onDrag: ({ self }) => {
+          const closestEdge = extractClosestEdge(self.data);
+
+          setState((state) => {
+            if (
+              state.type === "is-dragging-over" &&
+              state.closestEdge === closestEdge
+            ) {
+              return state;
+            }
+            return { type: "is-dragging-over", closestEdge };
+          });
+        },
+        onDragLeave: () => setState({ type: "idle" }),
+        onDrop: () => setState({ type: "idle" }),
       }),
     );
   }, []);
 
   return (
     <>
-      <div
-        ref={ref}
-        className={clsx(
-          "flex items-center rounded border p-2 pl-0 hover:cursor-grab hover:bg-gray-100",
-          stateStyles[state.type],
-        )}
-      >
-        <div className="flex w-6 justify-center">
-          <GripVerticalIcon size={10} />
+      <div className="relative">
+        <div
+          ref={ref}
+          className={clsx(
+            "flex items-center rounded border p-2 pl-0 hover:cursor-grab hover:bg-gray-100",
+            stateStyles[state.type],
+          )}
+        >
+          <div className="flex w-6 justify-center">
+            <GripVerticalIcon size={10} />
+          </div>
+          <span>Item: ({task.id})</span>
         </div>
-        <span>Item: ({task.id})</span>
+        {state.type === "is-dragging-over" && state.closestEdge ? (
+          <DropIndicator edge={state.closestEdge} gap={8} />
+        ) : null}
       </div>
       {state.type === "preview"
         ? createPortal(<DragPreview task={task} />, state.container)
